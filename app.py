@@ -16,6 +16,7 @@ from mvh_transform import (
     is_raw_mvh_report,
     write_excel_with_formats,
 )
+from auth import logout_button, require_login
 from theme import CATEGORICAL, PAGE_CSS, apply_plotly_theme, blue_colormap, style_growth_column
 
 st.set_page_config(page_title="MVH Report", layout="wide")
@@ -190,6 +191,54 @@ def load_periods():
     return periods, metadata
 
 
+def load_periods_readonly():
+    """Reads whatever period files are already persisted, without showing
+    upload controls — used by the restricted per-manager view.
+    """
+    metadata = _load_metadata()
+    periods = {}
+    for label in PERIOD_LABELS:
+        slug = PERIOD_SLUGS[label]
+        existing = list(UPLOAD_DIR.glob(f"{slug}.*"))
+        if not existing:
+            continue
+        d = load_file_from_path(str(existing[0]), existing[0].stat().st_mtime)
+        if is_raw_mvh_report(d):
+            d = apply_mvh_transform(d)
+        periods[label] = d
+    return periods, metadata
+
+
+def manager_view(user):
+    st.title(f"MVH Report — {user['name']}")
+
+    periods, metadata = load_periods_readonly()
+    period_tab_labels = [label for label in PERIOD_LABELS if label in periods]
+
+    if not period_tab_labels:
+        st.info("No data has been uploaded yet. Check back once the admin uploads the latest exports.")
+        return
+
+    manager_email = user.get("manager_email")
+    tabs = st.tabs(period_tab_labels)
+    for label, tab in zip(period_tab_labels, tabs):
+        with tab:
+            info = metadata.get(label)
+            if info:
+                st.caption(f"🕒 Last updated {info['uploaded_at']}")
+            d = periods[label]
+            if MANAGER_COL not in d.columns:
+                st.warning(f"No '{MANAGER_COL}' column in this file.")
+                continue
+            sub = d[d[MANAGER_COL].astype(str).str.strip() == manager_email]
+            if sub.empty:
+                st.caption("No data for you in this period.")
+                continue
+            sub = sub.copy()
+            sub[MANAGER_COL] = sub[MANAGER_COL].map(display_manager_name)
+            render_styled_table(sub)
+
+
 def mvh_report_page():
     st.title("MVH Report")
 
@@ -355,13 +404,22 @@ def store_statistics_page():
     st.info("Coming soon — tell me what you'd like to see on this page.")
 
 
-with st.sidebar:
-    st.markdown("### 📈 Reporting")
+user = require_login()
 
-pg = st.navigation(
-    [
-        st.Page(mvh_report_page, title="MVH Report", icon="📊", default=True),
-        st.Page(store_statistics_page, title="Store Statistics", icon="🏬"),
-    ]
-)
-pg.run()
+with st.sidebar:
+    st.caption(f"Signed in as **{user['name']}**")
+    logout_button()
+
+if user.get("role") == "admin":
+    with st.sidebar:
+        st.markdown("### 📈 Reporting")
+
+    pg = st.navigation(
+        [
+            st.Page(mvh_report_page, title="MVH Report", icon="📊", default=True),
+            st.Page(store_statistics_page, title="Store Statistics", icon="🏬"),
+        ]
+    )
+    pg.run()
+else:
+    manager_view(user)

@@ -3,12 +3,14 @@ import plotly.express as px
 import streamlit as st
 
 from mvh_transform import (
+    GROWTH_COLUMN,
     apply_mvh_transform,
     build_column_formats,
+    compute_group_aggregates,
     is_raw_mvh_report,
     write_excel_with_formats,
 )
-from theme import CATEGORICAL, PAGE_CSS, apply_plotly_theme, blue_colormap
+from theme import CATEGORICAL, PAGE_CSS, apply_plotly_theme, blue_colormap, style_growth_column
 
 st.set_page_config(page_title="Data Analyzer", layout="wide")
 st.markdown(PAGE_CSS, unsafe_allow_html=True)
@@ -30,9 +32,12 @@ def load_file(file):
 
 def render_styled_table(df):
     formats = build_column_formats(df)
+    gradient_cols = [c for c in formats if c != GROWTH_COLUMN]
     styled = df.style.format(formats).background_gradient(
-        cmap=blue_colormap(), subset=list(formats.keys())
+        cmap=blue_colormap(), subset=gradient_cols
     )
+    if GROWTH_COLUMN in df.columns:
+        styled = style_growth_column(styled, GROWTH_COLUMN)
     st.dataframe(styled, use_container_width=True)
 
 
@@ -90,11 +95,7 @@ def render_chart_builder(filtered):
         st.plotly_chart(apply_plotly_theme(fig), use_container_width=True)
 
 
-mode = st.radio(
-    "Mode", ["Account manager report", "General explorer"], horizontal=True
-)
-
-if mode == "Account manager report":
+def load_periods():
     st.subheader("Upload period exports")
     st.caption(
         "Commercial month = 19th of previous month through the 18th (inclusive). "
@@ -119,6 +120,17 @@ if mode == "Account manager report":
         if is_raw_mvh_report(d):
             d = apply_mvh_transform(d)
         periods[label] = d
+    return periods
+
+
+mode = st.radio(
+    "Mode",
+    ["Account manager report", "Totals & averages", "General explorer"],
+    horizontal=True,
+)
+
+if mode in ("Account manager report", "Totals & averages"):
+    periods = load_periods()
 
     if not periods:
         st.info("Upload at least one period file to get started.")
@@ -135,23 +147,45 @@ if mode == "Account manager report":
         st.warning(f"No '{MANAGER_COL}' column found in the uploaded file(s).")
         st.stop()
 
-    tabs = st.tabs(managers)
-    for manager, tab in zip(managers, tabs):
-        with tab:
-            for label in PERIOD_LABELS:
-                if label not in periods:
-                    continue
+    if mode == "Account manager report":
+        tab_labels = ["All"] + managers
+        tabs = st.tabs(tab_labels)
+        for manager, tab in zip(tab_labels, tabs):
+            with tab:
+                for label in PERIOD_LABELS:
+                    if label not in periods:
+                        continue
+                    d = periods[label]
+                    if MANAGER_COL not in d.columns:
+                        continue
+                    if manager == "All":
+                        sub = d[d[MANAGER_COL].astype(str).str.strip().str.lower() != "total"]
+                    else:
+                        sub = d[d[MANAGER_COL].astype(str).str.strip() == manager]
+                    st.markdown(f"**{label}**")
+                    if sub.empty:
+                        st.caption("No data for this period.")
+                        continue
+                    render_styled_table(sub)
+
+    else:  # Totals & averages
+        period_tabs = st.tabs(list(periods.keys()))
+        for label, tab in zip(periods.keys(), period_tabs):
+            with tab:
                 d = periods[label]
                 if MANAGER_COL not in d.columns:
+                    st.warning(f"No '{MANAGER_COL}' column in this file.")
                     continue
-                sub = d[d[MANAGER_COL].astype(str).str.strip() == manager]
-                st.markdown(f"**{label}**")
-                if sub.empty:
-                    st.caption("No data for this period.")
-                    continue
-                render_styled_table(sub)
+                d = d[d[MANAGER_COL].astype(str).str.strip().str.lower() != "total"]
+                totals, averages = compute_group_aggregates(d, MANAGER_COL)
 
-else:
+                st.markdown("**Totals by account manager**")
+                render_styled_table(totals.reset_index().rename(columns={"index": MANAGER_COL}))
+
+                st.markdown("**Averages by account manager**")
+                render_styled_table(averages.reset_index().rename(columns={"index": MANAGER_COL}))
+
+else:  # General explorer
     uploaded = st.file_uploader("Upload a CSV or Excel file", type=["csv", "xlsx", "xls"])
 
     if not uploaded:

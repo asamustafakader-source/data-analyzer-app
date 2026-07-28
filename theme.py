@@ -1,3 +1,4 @@
+import pandas as pd
 from matplotlib.colors import LinearSegmentedColormap
 
 # Validated categorical palette (fixed order — never cycle/reassign per filter)
@@ -35,6 +36,26 @@ BASELINE = "#c3c2b7"
 
 def blue_colormap():
     return LinearSegmentedColormap.from_list("sequential_blue", SEQUENTIAL_BLUE)
+
+
+# Excel's classic green/yellow/red conditional-formatting triplets
+GROWTH_POSITIVE = "background-color: #C6EFCE; color: #006100"
+GROWTH_ZERO = "background-color: #FFEB9C; color: #9C6500"
+GROWTH_NEGATIVE = "background-color: #FFC7CE; color: #9C0006"
+
+
+def _growth_cell_style(value):
+    if pd.isna(value):
+        return ""
+    if value > 0:
+        return GROWTH_POSITIVE
+    if value < 0:
+        return GROWTH_NEGATIVE
+    return GROWTH_ZERO
+
+
+def style_growth_column(styler, column):
+    return styler.map(_growth_cell_style, subset=[column])
 
 
 def apply_plotly_theme(fig):

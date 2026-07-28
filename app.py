@@ -450,18 +450,24 @@ def mvh_report_page():
         )
 
 
-def store_statistics_page():
+def store_statistics_page(manager_email=None):
     st.title("Store Statistics")
-    st.caption(
-        "Search stores by name (Dimension), select one or more, and see a combined "
-        "total. Uses whichever period files are uploaded on the MVH Report page."
-    )
+    if manager_email:
+        st.caption(
+            "Search your stores by name (Dimension), select one or more, and see a "
+            "combined total."
+        )
+    else:
+        st.caption(
+            "Search stores by name (Dimension), select one or more, and see a combined "
+            "total. Uses whichever period files are uploaded on the MVH Report page."
+        )
 
     periods, metadata = load_periods_readonly()
     period_tab_labels = [label for label in PERIOD_LABELS if label in periods]
 
     if not period_tab_labels:
-        st.info("No data has been uploaded yet. Upload period files from the MVH Report page first.")
+        st.info("No data has been uploaded yet. Check back once the admin uploads the latest exports.")
         return
 
     tabs = st.tabs(period_tab_labels)
@@ -476,10 +482,20 @@ def store_statistics_page():
                 st.warning("No 'Dimension' column in this file.")
                 continue
 
+            if manager_email:
+                if MANAGER_COL not in d.columns:
+                    st.warning(f"No '{MANAGER_COL}' column in this file.")
+                    continue
+                d = d[d[MANAGER_COL].astype(str).str.strip() == manager_email]
+
             is_grand_total = d["Dimension"].astype(str).str.strip().str.lower() == "grand total"
             grand_total_row = d[is_grand_total]
             d_no_total = d[~is_grand_total]
             all_dimensions = sorted(d_no_total["Dimension"].dropna().astype(str).str.strip().unique())
+
+            if d_no_total.empty:
+                st.caption("No stores found for this period.")
+                continue
 
             search = st.text_input("Search stores", key=f"dim_search_{label}")
             options = (
@@ -499,28 +515,49 @@ def store_statistics_page():
                     st.caption("Select one or more stores above to see their data.")
                     continue
                 display_sub = d_no_total[d_no_total["Dimension"].astype(str).str.strip().isin(selected)]
+                needs_computed_summary = True
+            else:
+                display_sub = pd.concat([grand_total_row, d_no_total])
+                # a real Grand Total row only exists in the unfiltered admin view;
+                # a manager-scoped "All stores" total has no source row to reuse
+                needs_computed_summary = grand_total_row.empty
 
-                if display_sub.empty:
-                    st.caption("No matching stores.")
-                    continue
+            if display_sub.empty:
+                st.caption("No matching stores.")
+                continue
 
-                render_styled_table(display_sub)
+            render_styled_table(display_sub)
 
+            if needs_computed_summary:
+                summary_source = display_sub[
+                    display_sub["Dimension"].astype(str).str.strip().str.lower() != "grand total"
+                ]
                 st.markdown("**Summary total**")
-                totals, _ = compute_group_aggregates(display_sub, "Dimension")
+                totals, _ = compute_group_aggregates(summary_source, "Dimension")
                 summary_row = totals.loc[["All"]].rename(
-                    index={"All": f"Total ({len(display_sub)} stores)"}
+                    index={"All": f"Total ({len(summary_source)} stores)"}
                 )
                 summary_row = summary_row.reset_index().rename(columns={"index": "Dimension"})
                 render_styled_table(summary_row)
-            else:
-                display_sub = pd.concat([grand_total_row, d_no_total])
-                if display_sub.empty:
-                    st.caption("No matching stores.")
-                    continue
-                # the Grand Total row (top of the table above) is already the
-                # source file's own total, so no separate summary is needed here
-                render_styled_table(display_sub)
+
+
+def manager_pages(user):
+    manager_email = user.get("manager_email")
+    return [
+        st.Page(
+            lambda: manager_view(user),
+            title="MVH Report",
+            icon="📊",
+            default=True,
+            url_path="mvh-report",
+        ),
+        st.Page(
+            lambda: store_statistics_page(manager_email=manager_email),
+            title="Store Statistics",
+            icon="🏬",
+            url_path="store-statistics",
+        ),
+    ]
 
 
 def main():
@@ -544,13 +581,13 @@ def main():
         if view_as != "Admin (full access)":
             with st.sidebar:
                 st.info(f"Previewing as **{view_as}**")
-            manager_view(
-                {
-                    "name": view_as,
-                    "role": "manager",
-                    "manager_email": MANAGER_EMAIL_BY_NAME.get(view_as),
-                }
-            )
+            preview_user = {
+                "name": view_as,
+                "role": "manager",
+                "manager_email": MANAGER_EMAIL_BY_NAME.get(view_as),
+            }
+            pg = st.navigation(manager_pages(preview_user))
+            pg.run()
             return
 
         with st.sidebar:
@@ -564,7 +601,8 @@ def main():
         )
         pg.run()
     else:
-        manager_view(user)
+        pg = st.navigation(manager_pages(user))
+        pg.run()
 
 
 if __name__ == "__main__":

@@ -246,6 +246,7 @@ def mvh_report_page():
         "Mode",
         ["Account manager report", "Totals & averages", "General explorer"],
         horizontal=True,
+        key="mvh_mode",
     )
 
     if mode in ("Account manager report", "Totals & averages"):
@@ -290,7 +291,8 @@ def mvh_report_page():
                     selection = selection or "All"
 
                     if selection == "All":
-                        sub = d[d[MANAGER_COL].astype(str).str.strip().str.lower() != "total"]
+                        is_total = d[MANAGER_COL].astype(str).str.strip().str.lower() == "total"
+                        sub = pd.concat([d[is_total], d[~is_total]])
                     else:
                         email = MANAGER_EMAIL_BY_NAME.get(selection, selection)
                         sub = d[d[MANAGER_COL].astype(str).str.strip() == email]
@@ -317,6 +319,10 @@ def mvh_report_page():
                         continue
                     d = d[d[MANAGER_COL].astype(str).str.strip().str.lower() != "total"]
                     totals, averages = compute_group_aggregates(d, MANAGER_COL)
+                    totals = totals.reindex(["All"] + [i for i in totals.index if i != "All"])
+                    averages = averages.reindex(
+                        ["All"] + [i for i in averages.index if i != "All"]
+                    )
                     totals.index = [
                         display_manager_name(i) if i != "All" else i for i in totals.index
                     ]
@@ -425,8 +431,10 @@ def store_statistics_page():
                 st.warning("No 'Dimension' column in this file.")
                 continue
 
-            d = d[d["Dimension"].astype(str).str.strip().str.lower() != "grand total"]
-            all_dimensions = sorted(d["Dimension"].dropna().astype(str).str.strip().unique())
+            is_grand_total = d["Dimension"].astype(str).str.strip().str.lower() == "grand total"
+            grand_total_row = d[is_grand_total]
+            d_no_total = d[~is_grand_total]
+            all_dimensions = sorted(d_no_total["Dimension"].dropna().astype(str).str.strip().unique())
 
             search = st.text_input("Search stores", key=f"dim_search_{label}")
             options = (
@@ -445,19 +453,23 @@ def store_statistics_page():
                 if not selected:
                     st.caption("Select one or more stores above to see their data.")
                     continue
-                sub = d[d["Dimension"].astype(str).str.strip().isin(selected)]
+                display_sub = d_no_total[d_no_total["Dimension"].astype(str).str.strip().isin(selected)]
+                summary_source = display_sub
             else:
-                sub = d
+                display_sub = pd.concat([grand_total_row, d_no_total])
+                summary_source = d_no_total
 
-            if sub.empty:
+            if display_sub.empty:
                 st.caption("No matching stores.")
                 continue
 
-            render_styled_table(sub)
+            render_styled_table(display_sub)
 
             st.markdown("**Summary total**")
-            totals, _ = compute_group_aggregates(sub, "Dimension")
-            summary_row = totals.loc[["All"]].rename(index={"All": f"Total ({len(sub)} stores)"})
+            totals, _ = compute_group_aggregates(summary_source, "Dimension")
+            summary_row = totals.loc[["All"]].rename(
+                index={"All": f"Total ({len(summary_source)} stores)"}
+            )
             summary_row = summary_row.reset_index().rename(columns={"index": "Dimension"})
             render_styled_table(summary_row)
 

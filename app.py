@@ -279,10 +279,13 @@ def store_statistics_page():
     st.info("Coming soon — tell me what you'd like to see on this page.")
 
 
+with st.sidebar:
+    st.markdown("### 📈 Reporting")
+
 pg = st.navigation(
     [
-        st.Page(mvh_report_page, title="MVH Report", default=True),
-        st.Page(store_statistics_page, title="Store Statistics"),
+        st.Page(mvh_report_page, title="MVH Report", icon="📊", default=True),
+        st.Page(store_statistics_page, title="Store Statistics", icon="🏬"),
     ]
 )
 pg.run()

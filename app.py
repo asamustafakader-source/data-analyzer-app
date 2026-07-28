@@ -31,6 +31,10 @@ def load_file(file):
     return df
 
 
+def full_table_height(df):
+    return int((len(df) + 1) * 35 + 3)
+
+
 def render_styled_table(df):
     formats = build_column_formats(df)
     gradient_cols = [c for c in formats if c != GROWTH_COLUMN]
@@ -39,7 +43,7 @@ def render_styled_table(df):
     )
     if GROWTH_COLUMN in df.columns:
         styled = style_growth_column(styled, GROWTH_COLUMN)
-    st.dataframe(styled, use_container_width=True)
+    st.dataframe(styled, use_container_width=True, height=full_table_height(df))
 
 
 def render_chart_builder(filtered):
@@ -256,13 +260,17 @@ def mvh_report_page():
         render_styled_table(filtered)
 
         st.subheader("Summary statistics")
-        st.dataframe(filtered.describe(include="all").transpose(), use_container_width=True)
+        summary = filtered.describe(include="all").transpose()
+        st.dataframe(summary, use_container_width=True, height=full_table_height(summary))
 
         missing = filtered.isna().sum()
         missing = missing[missing > 0]
         if not missing.empty:
             st.subheader("Missing values")
-            st.dataframe(missing.rename("missing_count"), use_container_width=True)
+            missing_df = missing.rename("missing_count")
+            st.dataframe(
+                missing_df, use_container_width=True, height=full_table_height(missing_df)
+            )
 
         render_chart_builder(filtered)
 

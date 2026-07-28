@@ -14,9 +14,9 @@ from mvh_transform import (
 )
 from theme import CATEGORICAL, PAGE_CSS, apply_plotly_theme, blue_colormap, style_growth_column
 
-st.set_page_config(page_title="Data Analyzer", layout="wide")
+st.set_page_config(page_title="MVH Report", layout="wide")
 st.markdown(PAGE_CSS, unsafe_allow_html=True)
-st.title("Data Analyzer")
+st.title("MVH Report")
 
 MANAGER_COL = "Account Manager Email"
 PERIOD_LABELS = ["Yesterday", "Commercial Month (19th–18th)", "Calendar Month"]
@@ -125,11 +125,12 @@ def load_periods():
     return periods
 
 
-mode = st.radio(
-    "Mode",
-    ["Account manager report", "Totals & averages", "General explorer"],
-    horizontal=True,
-)
+with st.sidebar:
+    st.header("Navigation")
+    mode = st.radio(
+        "View",
+        ["Account manager report", "Totals & averages", "General explorer"],
+    )
 
 if mode in ("Account manager report", "Totals & averages"):
     periods = load_periods()

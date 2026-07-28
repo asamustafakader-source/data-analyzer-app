@@ -31,8 +31,8 @@ def load_file(file):
     return df
 
 
-def full_table_height(df):
-    return int((len(df) + 1) * 35 + 3)
+def full_table_height(df, max_height=600):
+    return min(int((len(df) + 1) * 35 + 3), max_height)
 
 
 def render_styled_table(df):

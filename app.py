@@ -298,6 +298,48 @@ def mvh_report_page():
                         st.caption("No data for this manager/period.")
                         continue
 
+                    with st.expander("Filters", expanded=False):
+                        filter_col1, filter_col2 = st.columns(2)
+                        with filter_col1:
+                            store_id_query = st.text_input(
+                                "Filter by Store ID", key=f"storeid_filter_{label}"
+                            )
+                        with filter_col2:
+                            dim_search = st.text_input(
+                                "Search Dimension", key=f"dim_search_report_{label}"
+                            )
+                            dim_options = sorted(
+                                sub.loc[
+                                    sub["Dimension"].astype(str).str.strip().str.lower()
+                                    != "grand total",
+                                    "Dimension",
+                                ]
+                                .dropna()
+                                .astype(str)
+                                .str.strip()
+                                .unique()
+                            )
+                            if dim_search:
+                                dim_options = [
+                                    dim for dim in dim_options if dim_search.lower() in dim.lower()
+                                ]
+                            dim_selected = st.multiselect(
+                                "Filter by Dimension", dim_options, key=f"dim_filter_{label}"
+                            )
+
+                    if store_id_query:
+                        sub = sub[
+                            sub["Store ID"].astype(str).str.contains(
+                                store_id_query, case=False, na=False
+                            )
+                        ]
+                    if dim_selected:
+                        sub = sub[sub["Dimension"].astype(str).str.strip().isin(dim_selected)]
+
+                    if sub.empty:
+                        st.caption("No rows match the current filters.")
+                        continue
+
                     sub = sub.copy()
                     sub[MANAGER_COL] = sub[MANAGER_COL].map(display_manager_name)
                     render_styled_table(sub)

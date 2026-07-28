@@ -27,24 +27,21 @@ WARN_FILL = "background-color: #FFEB9C; color: #9C6500"
 BAD_FILL = "background-color: #FFC7CE; color: #9C0006"
 
 
-def _threshold_cell_style(value, good_max, warn_max):
+def _growth_cell_style(value):
     if pd.isna(value):
         return ""
-    if value <= good_max:
+    if value > 0:
         return GOOD_FILL
-    if value <= warn_max:
-        return WARN_FILL
-    return BAD_FILL
+    if value < 0:
+        return BAD_FILL
+    return WARN_FILL
 
 
-def style_percent_threshold(styler, column, good_max=0.02, warn_max=0.05):
-    """Green/yellow/red fill for a rate column where lower is better
-    (e.g. a cancellation rate) — green up to good_max, yellow up to
-    warn_max, red above that.
+def style_growth_column(styler, column):
+    """Green/yellow/red fill for a signed rate column — green if
+    positive, yellow if zero, red if negative.
     """
-    return styler.map(
-        lambda v: _threshold_cell_style(v, good_max, warn_max), subset=[column]
-    )
+    return styler.map(_growth_cell_style, subset=[column])
 
 
 def apply_plotly_theme(fig):

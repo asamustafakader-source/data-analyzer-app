@@ -16,7 +16,6 @@ from theme import CATEGORICAL, PAGE_CSS, apply_plotly_theme, blue_colormap, styl
 
 st.set_page_config(page_title="MVH Report", layout="wide")
 st.markdown(PAGE_CSS, unsafe_allow_html=True)
-st.title("MVH Report")
 
 MANAGER_COL = "Account Manager Email"
 PERIOD_LABELS = ["Yesterday", "Commercial Month (19th–18th)", "Calendar Month"]
@@ -125,144 +124,165 @@ def load_periods():
     return periods
 
 
-with st.sidebar:
-    st.header("Navigation")
+def mvh_report_page():
+    st.title("MVH Report")
+
     mode = st.radio(
-        "View",
+        "Mode",
         ["Account manager report", "Totals & averages", "General explorer"],
+        horizontal=True,
     )
 
-if mode in ("Account manager report", "Totals & averages"):
-    periods = load_periods()
+    if mode in ("Account manager report", "Totals & averages"):
+        periods = load_periods()
 
-    if not periods:
-        st.info("Upload at least one period file to get started.")
-        st.stop()
+        if not periods:
+            st.info("Upload at least one period file to get started.")
+            st.stop()
 
-    managers = set()
-    for d in periods.values():
-        if MANAGER_COL in d.columns:
-            vals = d[MANAGER_COL].dropna().astype(str).str.strip()
-            managers.update(v for v in vals.unique() if v.lower() != "total")
-    managers = sorted(managers)
+        managers = set()
+        for d in periods.values():
+            if MANAGER_COL in d.columns:
+                vals = d[MANAGER_COL].dropna().astype(str).str.strip()
+                managers.update(v for v in vals.unique() if v.lower() != "total")
+        managers = sorted(managers)
 
-    if not managers:
-        st.warning(f"No '{MANAGER_COL}' column found in the uploaded file(s).")
-        st.stop()
+        if not managers:
+            st.warning(f"No '{MANAGER_COL}' column found in the uploaded file(s).")
+            st.stop()
 
-    display_names = sorted({display_manager_name(m) for m in managers})
+        display_names = sorted({display_manager_name(m) for m in managers})
 
-    if mode == "Account manager report":
-        period_tab_labels = [label for label in PERIOD_LABELS if label in periods]
-        period_tabs = st.tabs(period_tab_labels)
-        for label, tab in zip(period_tab_labels, period_tabs):
-            with tab:
-                d = periods[label]
-                if MANAGER_COL not in d.columns:
-                    st.warning(f"No '{MANAGER_COL}' column in this file.")
-                    continue
+        if mode == "Account manager report":
+            period_tab_labels = [label for label in PERIOD_LABELS if label in periods]
+            period_tabs = st.tabs(period_tab_labels)
+            for label, tab in zip(period_tab_labels, period_tabs):
+                with tab:
+                    d = periods[label]
+                    if MANAGER_COL not in d.columns:
+                        st.warning(f"No '{MANAGER_COL}' column in this file.")
+                        continue
 
-                selection = st.segmented_control(
-                    "Account manager",
-                    ["All"] + display_names,
-                    default="All",
-                    key=f"manager_toggle_{label}",
-                )
-                selection = selection or "All"
+                    selection = st.segmented_control(
+                        "Account manager",
+                        ["All"] + display_names,
+                        default="All",
+                        key=f"manager_toggle_{label}",
+                    )
+                    selection = selection or "All"
 
-                if selection == "All":
-                    sub = d[d[MANAGER_COL].astype(str).str.strip().str.lower() != "total"]
-                else:
-                    email = MANAGER_EMAIL_BY_NAME.get(selection, selection)
-                    sub = d[d[MANAGER_COL].astype(str).str.strip() == email]
+                    if selection == "All":
+                        sub = d[d[MANAGER_COL].astype(str).str.strip().str.lower() != "total"]
+                    else:
+                        email = MANAGER_EMAIL_BY_NAME.get(selection, selection)
+                        sub = d[d[MANAGER_COL].astype(str).str.strip() == email]
 
-                if sub.empty:
-                    st.caption("No data for this manager/period.")
-                    continue
+                    if sub.empty:
+                        st.caption("No data for this manager/period.")
+                        continue
 
-                sub = sub.copy()
-                sub[MANAGER_COL] = sub[MANAGER_COL].map(display_manager_name)
-                render_styled_table(sub)
+                    sub = sub.copy()
+                    sub[MANAGER_COL] = sub[MANAGER_COL].map(display_manager_name)
+                    render_styled_table(sub)
 
-    else:  # Totals & averages
-        period_tab_labels = [label for label in PERIOD_LABELS if label in periods]
-        period_tabs = st.tabs(period_tab_labels)
-        for label, tab in zip(period_tab_labels, period_tabs):
-            with tab:
-                d = periods[label]
-                if MANAGER_COL not in d.columns:
-                    st.warning(f"No '{MANAGER_COL}' column in this file.")
-                    continue
-                d = d[d[MANAGER_COL].astype(str).str.strip().str.lower() != "total"]
-                totals, averages = compute_group_aggregates(d, MANAGER_COL)
-                totals.index = [
-                    display_manager_name(i) if i != "All" else i for i in totals.index
-                ]
-                averages.index = [
-                    display_manager_name(i) if i != "All" else i for i in averages.index
-                ]
+        else:  # Totals & averages
+            period_tab_labels = [label for label in PERIOD_LABELS if label in periods]
+            period_tabs = st.tabs(period_tab_labels)
+            for label, tab in zip(period_tab_labels, period_tabs):
+                with tab:
+                    d = periods[label]
+                    if MANAGER_COL not in d.columns:
+                        st.warning(f"No '{MANAGER_COL}' column in this file.")
+                        continue
+                    d = d[d[MANAGER_COL].astype(str).str.strip().str.lower() != "total"]
+                    totals, averages = compute_group_aggregates(d, MANAGER_COL)
+                    totals.index = [
+                        display_manager_name(i) if i != "All" else i for i in totals.index
+                    ]
+                    averages.index = [
+                        display_manager_name(i) if i != "All" else i for i in averages.index
+                    ]
 
-                st.markdown("**Totals by account manager**")
-                render_styled_table(totals.reset_index().rename(columns={"index": MANAGER_COL}))
+                    st.markdown("**Totals by account manager**")
+                    render_styled_table(
+                        totals.reset_index().rename(columns={"index": MANAGER_COL})
+                    )
 
-                st.markdown("**Averages by account manager**")
-                render_styled_table(averages.reset_index().rename(columns={"index": MANAGER_COL}))
+                    st.markdown("**Averages by account manager**")
+                    render_styled_table(
+                        averages.reset_index().rename(columns={"index": MANAGER_COL})
+                    )
 
-else:  # General explorer
-    uploaded = st.file_uploader("Upload a CSV or Excel file", type=["csv", "xlsx", "xls"])
+    else:  # General explorer
+        uploaded = st.file_uploader("Upload a CSV or Excel file", type=["csv", "xlsx", "xls"])
 
-    if not uploaded:
-        st.info("Upload a file to get started.")
-        st.stop()
+        if not uploaded:
+            st.info("Upload a file to get started.")
+            st.stop()
 
-    df = load_file(uploaded)
+        df = load_file(uploaded)
 
-    if is_raw_mvh_report(df):
-        st.subheader("MVH transform")
-        apply_transform = st.checkbox(
-            "This looks like the raw Tableau MVH export — apply the MVH transform", value=True
-        )
-        if apply_transform:
-            df = apply_mvh_transform(df)
-            st.download_button(
-                "Download transformed Excel",
-                write_excel_with_formats(df, sheet_name="MVH"),
-                "MVH_transformed.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        if is_raw_mvh_report(df):
+            st.subheader("MVH transform")
+            apply_transform = st.checkbox(
+                "This looks like the raw Tableau MVH export — apply the MVH transform",
+                value=True,
             )
+            if apply_transform:
+                df = apply_mvh_transform(df)
+                st.download_button(
+                    "Download transformed Excel",
+                    write_excel_with_formats(df, sheet_name="MVH"),
+                    "MVH_transformed.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
 
-    st.subheader("Filters")
-    filtered = df.copy()
-    with st.expander("Filter rows", expanded=False):
-        for col in df.columns:
-            if pd.api.types.is_numeric_dtype(df[col]):
-                lo, hi = float(df[col].min()), float(df[col].max())
-                if lo < hi:
-                    sel = st.slider(col, lo, hi, (lo, hi))
-                    filtered = filtered[filtered[col].between(*sel)]
-            elif df[col].nunique() <= 50:
-                options = df[col].dropna().unique().tolist()
-                sel = st.multiselect(col, options, default=options)
-                filtered = filtered[filtered[col].isin(sel)]
+        st.subheader("Filters")
+        filtered = df.copy()
+        with st.expander("Filter rows", expanded=False):
+            for col in df.columns:
+                if pd.api.types.is_numeric_dtype(df[col]):
+                    lo, hi = float(df[col].min()), float(df[col].max())
+                    if lo < hi:
+                        sel = st.slider(col, lo, hi, (lo, hi))
+                        filtered = filtered[filtered[col].between(*sel)]
+                elif df[col].nunique() <= 50:
+                    options = df[col].dropna().unique().tolist()
+                    sel = st.multiselect(col, options, default=options)
+                    filtered = filtered[filtered[col].isin(sel)]
 
-    st.subheader("Preview")
-    st.caption(f"{filtered.shape[0]} rows x {filtered.shape[1]} columns")
-    render_styled_table(filtered)
+        st.subheader("Preview")
+        st.caption(f"{filtered.shape[0]} rows x {filtered.shape[1]} columns")
+        render_styled_table(filtered)
 
-    st.subheader("Summary statistics")
-    st.dataframe(filtered.describe(include="all").transpose(), use_container_width=True)
+        st.subheader("Summary statistics")
+        st.dataframe(filtered.describe(include="all").transpose(), use_container_width=True)
 
-    missing = filtered.isna().sum()
-    missing = missing[missing > 0]
-    if not missing.empty:
-        st.subheader("Missing values")
-        st.dataframe(missing.rename("missing_count"), use_container_width=True)
+        missing = filtered.isna().sum()
+        missing = missing[missing > 0]
+        if not missing.empty:
+            st.subheader("Missing values")
+            st.dataframe(missing.rename("missing_count"), use_container_width=True)
 
-    render_chart_builder(filtered)
+        render_chart_builder(filtered)
 
-    st.download_button(
-        "Download filtered data as CSV",
-        filtered.to_csv(index=False).encode("utf-8"),
-        "filtered_data.csv",
-        "text/csv",
-    )
+        st.download_button(
+            "Download filtered data as CSV",
+            filtered.to_csv(index=False).encode("utf-8"),
+            "filtered_data.csv",
+            "text/csv",
+        )
+
+
+def store_statistics_page():
+    st.title("Store Statistics")
+    st.info("Coming soon — tell me what you'd like to see on this page.")
+
+
+pg = st.navigation(
+    [
+        st.Page(mvh_report_page, title="MVH Report", default=True),
+        st.Page(store_statistics_page, title="Store Statistics"),
+    ]
+)
+pg.run()

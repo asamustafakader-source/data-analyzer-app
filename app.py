@@ -313,12 +313,18 @@ def mvh_report_page():
                     info = metadata.get(label)
                     if info:
                         st.caption(f"🕒 Last updated {info['uploaded_at']}")
-                    d = periods[label]
-                    if MANAGER_COL not in d.columns:
+                    d_all = periods[label]
+                    if MANAGER_COL not in d_all.columns:
                         st.warning(f"No '{MANAGER_COL}' column in this file.")
                         continue
-                    d = d[d[MANAGER_COL].astype(str).str.strip().str.lower() != "total"]
+                    is_total = d_all[MANAGER_COL].astype(str).str.strip().str.lower() == "total"
+                    grand_total_row = d_all[is_total]
+                    d = d_all[~is_total]
                     totals, averages = compute_group_aggregates(d, MANAGER_COL)
+                    if not grand_total_row.empty:
+                        # use the source file's own Grand Total row verbatim so
+                        # this matches the original Excel macro output exactly
+                        totals.loc["All"] = grand_total_row.iloc[0].reindex(totals.columns)
                     totals = totals.reindex(["All"] + [i for i in totals.index if i != "All"])
                     averages = averages.reindex(
                         ["All"] + [i for i in averages.index if i != "All"]
@@ -454,24 +460,28 @@ def store_statistics_page():
                     st.caption("Select one or more stores above to see their data.")
                     continue
                 display_sub = d_no_total[d_no_total["Dimension"].astype(str).str.strip().isin(selected)]
-                summary_source = display_sub
+
+                if display_sub.empty:
+                    st.caption("No matching stores.")
+                    continue
+
+                render_styled_table(display_sub)
+
+                st.markdown("**Summary total**")
+                totals, _ = compute_group_aggregates(display_sub, "Dimension")
+                summary_row = totals.loc[["All"]].rename(
+                    index={"All": f"Total ({len(display_sub)} stores)"}
+                )
+                summary_row = summary_row.reset_index().rename(columns={"index": "Dimension"})
+                render_styled_table(summary_row)
             else:
                 display_sub = pd.concat([grand_total_row, d_no_total])
-                summary_source = d_no_total
-
-            if display_sub.empty:
-                st.caption("No matching stores.")
-                continue
-
-            render_styled_table(display_sub)
-
-            st.markdown("**Summary total**")
-            totals, _ = compute_group_aggregates(summary_source, "Dimension")
-            summary_row = totals.loc[["All"]].rename(
-                index={"All": f"Total ({len(summary_source)} stores)"}
-            )
-            summary_row = summary_row.reset_index().rename(columns={"index": "Dimension"})
-            render_styled_table(summary_row)
+                if display_sub.empty:
+                    st.caption("No matching stores.")
+                    continue
+                # the Grand Total row (top of the table above) is already the
+                # source file's own total, so no separate summary is needed here
+                render_styled_table(display_sub)
 
 
 def main():

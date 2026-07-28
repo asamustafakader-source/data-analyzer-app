@@ -110,6 +110,7 @@ RATIO_COLUMN_BASES = {
     "HL% Cost on Store": ("Net Top Up Amount", "Items Total Amount"),
     "Net HL % GMV": ("Net Top Up Amount", "Total GMV"),
     "toters+ cost %": ("Marketing Free Delivery", "Items Total Amount"),
+    "Average Cart": ("Items Total Amount", "Number of Arrived Orders"),
 }
 
 

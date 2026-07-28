@@ -4,9 +4,11 @@ import streamlit as st
 
 from mvh_transform import (
     GROWTH_COLUMN,
+    MANAGER_EMAIL_BY_NAME,
     apply_mvh_transform,
     build_column_formats,
     compute_group_aggregates,
+    display_manager_name,
     is_raw_mvh_report,
     write_excel_with_formats,
 )
@@ -147,30 +149,44 @@ if mode in ("Account manager report", "Totals & averages"):
         st.warning(f"No '{MANAGER_COL}' column found in the uploaded file(s).")
         st.stop()
 
+    display_names = sorted({display_manager_name(m) for m in managers})
+
     if mode == "Account manager report":
-        tab_labels = ["All"] + managers
-        tabs = st.tabs(tab_labels)
-        for manager, tab in zip(tab_labels, tabs):
+        period_tab_labels = [label for label in PERIOD_LABELS if label in periods]
+        period_tabs = st.tabs(period_tab_labels)
+        for label, tab in zip(period_tab_labels, period_tabs):
             with tab:
-                for label in PERIOD_LABELS:
-                    if label not in periods:
-                        continue
-                    d = periods[label]
-                    if MANAGER_COL not in d.columns:
-                        continue
-                    if manager == "All":
-                        sub = d[d[MANAGER_COL].astype(str).str.strip().str.lower() != "total"]
-                    else:
-                        sub = d[d[MANAGER_COL].astype(str).str.strip() == manager]
-                    st.markdown(f"**{label}**")
-                    if sub.empty:
-                        st.caption("No data for this period.")
-                        continue
-                    render_styled_table(sub)
+                d = periods[label]
+                if MANAGER_COL not in d.columns:
+                    st.warning(f"No '{MANAGER_COL}' column in this file.")
+                    continue
+
+                selection = st.segmented_control(
+                    "Account manager",
+                    ["All"] + display_names,
+                    default="All",
+                    key=f"manager_toggle_{label}",
+                )
+                selection = selection or "All"
+
+                if selection == "All":
+                    sub = d[d[MANAGER_COL].astype(str).str.strip().str.lower() != "total"]
+                else:
+                    email = MANAGER_EMAIL_BY_NAME.get(selection, selection)
+                    sub = d[d[MANAGER_COL].astype(str).str.strip() == email]
+
+                if sub.empty:
+                    st.caption("No data for this manager/period.")
+                    continue
+
+                sub = sub.copy()
+                sub[MANAGER_COL] = sub[MANAGER_COL].map(display_manager_name)
+                render_styled_table(sub)
 
     else:  # Totals & averages
-        period_tabs = st.tabs(list(periods.keys()))
-        for label, tab in zip(periods.keys(), period_tabs):
+        period_tab_labels = [label for label in PERIOD_LABELS if label in periods]
+        period_tabs = st.tabs(period_tab_labels)
+        for label, tab in zip(period_tab_labels, period_tabs):
             with tab:
                 d = periods[label]
                 if MANAGER_COL not in d.columns:
@@ -178,6 +194,12 @@ if mode in ("Account manager report", "Totals & averages"):
                     continue
                 d = d[d[MANAGER_COL].astype(str).str.strip().str.lower() != "total"]
                 totals, averages = compute_group_aggregates(d, MANAGER_COL)
+                totals.index = [
+                    display_manager_name(i) if i != "All" else i for i in totals.index
+                ]
+                averages.index = [
+                    display_manager_name(i) if i != "All" else i for i in averages.index
+                ]
 
                 st.markdown("**Totals by account manager**")
                 render_styled_table(totals.reset_index().rename(columns={"index": MANAGER_COL}))

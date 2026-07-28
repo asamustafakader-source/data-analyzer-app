@@ -89,6 +89,19 @@ PERCENT_COLUMNS = [
 
 GROWTH_COLUMN = "Items Total Growth"
 
+MANAGER_DISPLAY_NAMES = {
+    "hassan.fareed@totersapp.com": "Hassan",
+    "lania.salar@totersapp.com": "Lania",
+    "mustafa.hatam@totersapp.com": "Mustafa",
+    "sivar.farhad@totersapp.com": "Sivar",
+}
+
+MANAGER_EMAIL_BY_NAME = {name: email for email, name in MANAGER_DISPLAY_NAMES.items()}
+
+
+def display_manager_name(email) -> str:
+    return MANAGER_DISPLAY_NAMES.get(str(email).strip(), str(email).strip())
+
 # columns whose group "total" can be correctly recomputed as a ratio of summed
 # base columns, rather than a naive sum/mean of the per-row percentage
 RATIO_COLUMN_BASES = {

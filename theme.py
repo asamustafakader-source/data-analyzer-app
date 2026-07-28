@@ -84,27 +84,158 @@ PAGE_CSS = f"""
   --ink: {PRIMARY_INK};
   --ink-secondary: {SECONDARY_INK};
   --accent: {CATEGORICAL[0]};
-  --border: rgba(11,11,11,0.10);
+  --accent-wash: rgba(42,120,214,0.12);
+  --border: rgba(11,11,11,0.08);
+  --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-hover: 0 6px 16px rgba(42,120,214,0.20);
 }}
 @media (prefers-color-scheme: dark) {{
   :root {{
-    --surface: #1a1a19;
+    --surface: #1c1c1e;
     --page-plane: #0d0d0d;
     --ink: #ffffff;
     --ink-secondary: #c3c2b7;
     --accent: #3987e5;
+    --accent-wash: rgba(57,135,229,0.18);
     --border: rgba(255,255,255,0.10);
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.25);
+    --shadow-hover: 0 6px 18px rgba(57,135,229,0.35);
   }}
 }}
-h2, h3 {{
-  border-left: 4px solid var(--accent);
-  padding-left: 0.6rem;
+
+html, body, [class*="css"] {{
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    system-ui, sans-serif !important;
+  -webkit-font-smoothing: antialiased;
 }}
+
+h1 {{ font-weight: 700 !important; letter-spacing: -0.02em; }}
+h2, h3 {{ font-weight: 650 !important; letter-spacing: -0.01em; }}
+
+/* ---------- Buttons ---------- */
+.stApp button[kind] {{
+  border-radius: 980px !important;
+  padding: 0.5rem 1.25rem !important;
+  font-weight: 590 !important;
+  border: 1px solid var(--border) !important;
+  background: var(--surface) !important;
+  color: var(--ink) !important;
+  box-shadow: var(--shadow);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}}
+.stApp button[kind="primary"] {{
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border: none !important;
+}}
+.stApp button[kind]:hover {{
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-hover);
+}}
+.stApp button[kind="secondary"]:hover {{
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+}}
+.stApp button[kind]:active {{
+  transform: translateY(0);
+}}
+
+/* ---------- Text / number inputs ---------- */
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stTextArea"] textarea {{
+  border-radius: 12px !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: none !important;
+  padding: 0.55rem 0.85rem !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}}
+[data-testid="stTextInput"] input:focus,
+[data-testid="stNumberInput"] input:focus,
+[data-testid="stTextArea"] textarea:focus {{
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-wash) !important;
+}}
+
+/* ---------- Select / multiselect (BaseWeb) ---------- */
+[data-baseweb="select"] > div {{
+  border-radius: 12px !important;
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+}}
+[data-baseweb="tag"] {{
+  border-radius: 8px !important;
+  background: var(--accent-wash) !important;
+}}
+
+/* ---------- Segmented control ---------- */
+[data-testid="stSegmentedControl"] label {{
+  border-radius: 980px !important;
+}}
+
+/* ---------- Tabs: pill style instead of underline ---------- */
+[data-baseweb="tab-list"] {{
+  gap: 4px;
+  background: var(--page-plane);
+  padding: 4px;
+  border-radius: 14px;
+  border-bottom: none !important;
+  width: fit-content;
+}}
+[data-baseweb="tab"] {{
+  border-radius: 10px !important;
+  padding: 0.45rem 1.1rem !important;
+  transition: background 0.15s ease;
+}}
+[data-baseweb="tab"][aria-selected="true"] {{
+  background: var(--surface) !important;
+  box-shadow: var(--shadow);
+}}
+[data-baseweb="tab-highlight"] {{
+  display: none;
+}}
+
+/* ---------- Expander / cards ---------- */
+[data-testid="stExpander"] {{
+  border-radius: 14px !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}}
+
+/* ---------- File uploader ---------- */
+[data-testid="stFileUploaderDropzone"] {{
+  border-radius: 14px !important;
+  border: 1.5px dashed var(--border) !important;
+  background: var(--page-plane) !important;
+}}
+
+/* ---------- DataFrame ---------- */
+[data-testid="stDataFrame"] {{
+  border-radius: 14px !important;
+  overflow: hidden;
+  border: 1px solid var(--border) !important;
+  box-shadow: var(--shadow);
+}}
+
+/* ---------- Sidebar ---------- */
+[data-testid="stSidebar"] {{
+  border-right: 1px solid var(--border);
+}}
+
+/* ---------- Metric tiles ---------- */
 [data-testid="stMetric"] {{
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.75rem;
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow);
+}}
+
+/* ---------- Alerts (info/warning/error/success) ---------- */
+[data-testid="stAlert"] {{
+  border-radius: 14px !important;
+  border: none !important;
 }}
 </style>
 """

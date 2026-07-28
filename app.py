@@ -401,25 +401,88 @@ def mvh_report_page():
 
 def store_statistics_page():
     st.title("Store Statistics")
-    st.info("Coming soon — tell me what you'd like to see on this page.")
-
-
-user = require_login()
-
-with st.sidebar:
-    st.caption(f"Signed in as **{user['name']}**")
-    logout_button()
-
-if user.get("role") == "admin":
-    with st.sidebar:
-        st.markdown("### 📈 Reporting")
-
-    pg = st.navigation(
-        [
-            st.Page(mvh_report_page, title="MVH Report", icon="📊", default=True),
-            st.Page(store_statistics_page, title="Store Statistics", icon="🏬"),
-        ]
+    st.caption(
+        "Search stores by name (Dimension), select one or more, and see a combined "
+        "total. Uses whichever period files are uploaded on the MVH Report page."
     )
-    pg.run()
-else:
-    manager_view(user)
+
+    periods, metadata = load_periods_readonly()
+    period_tab_labels = [label for label in PERIOD_LABELS if label in periods]
+
+    if not period_tab_labels:
+        st.info("No data has been uploaded yet. Upload period files from the MVH Report page first.")
+        return
+
+    tabs = st.tabs(period_tab_labels)
+    for label, tab in zip(period_tab_labels, tabs):
+        with tab:
+            info = metadata.get(label)
+            if info:
+                st.caption(f"🕒 Last updated {info['uploaded_at']}")
+
+            d = periods[label]
+            if "Dimension" not in d.columns:
+                st.warning("No 'Dimension' column in this file.")
+                continue
+
+            d = d[d["Dimension"].astype(str).str.strip().str.lower() != "grand total"]
+            all_dimensions = sorted(d["Dimension"].dropna().astype(str).str.strip().unique())
+
+            search = st.text_input("Search stores", key=f"dim_search_{label}")
+            options = (
+                [dim for dim in all_dimensions if search.lower() in dim.lower()]
+                if search
+                else all_dimensions
+            )
+
+            selected = st.multiselect("Select stores", options, key=f"dim_select_{label}")
+
+            view = st.radio(
+                "Show", ["Selected only", "All stores"], horizontal=True, key=f"dim_view_{label}"
+            )
+
+            if view == "Selected only":
+                if not selected:
+                    st.caption("Select one or more stores above to see their data.")
+                    continue
+                sub = d[d["Dimension"].astype(str).str.strip().isin(selected)]
+            else:
+                sub = d
+
+            if sub.empty:
+                st.caption("No matching stores.")
+                continue
+
+            render_styled_table(sub)
+
+            st.markdown("**Summary total**")
+            totals, _ = compute_group_aggregates(sub, "Dimension")
+            summary_row = totals.loc[["All"]].rename(index={"All": f"Total ({len(sub)} stores)"})
+            summary_row = summary_row.reset_index().rename(columns={"index": "Dimension"})
+            render_styled_table(summary_row)
+
+
+def main():
+    user = require_login()
+
+    with st.sidebar:
+        st.caption(f"Signed in as **{user['name']}**")
+        logout_button()
+
+    if user.get("role") == "admin":
+        with st.sidebar:
+            st.markdown("### 📈 Reporting")
+
+        pg = st.navigation(
+            [
+                st.Page(mvh_report_page, title="MVH Report", icon="📊", default=True),
+                st.Page(store_statistics_page, title="Store Statistics", icon="🏬"),
+            ]
+        )
+        pg.run()
+    else:
+        manager_view(user)
+
+
+if __name__ == "__main__":
+    main()

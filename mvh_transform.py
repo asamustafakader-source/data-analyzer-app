@@ -148,6 +148,10 @@ def apply_mvh_transform(df: pd.DataFrame) -> pd.DataFrame:
         df["Number of Arrived Orders"] + df["Number of Canceled Orders After Approval"],
     )
 
+    # this raw column mixes strings ("04:12:00") and datetimes (the Grand
+    # Total row), which breaks Arrow serialization when rendering the table
+    df["Avg. Time from Placed On to Canceled"] = df["Avg. Time from Placed On to Canceled"].astype(str)
+
     return df[FINAL_COLUMN_ORDER]
 
 

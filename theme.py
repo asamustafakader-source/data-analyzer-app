@@ -1,5 +1,4 @@
 import pandas as pd
-from matplotlib.colors import LinearSegmentedColormap
 
 # Validated categorical palette (fixed order — never cycle/reassign per filter)
 CATEGORICAL = [
@@ -13,18 +12,6 @@ CATEGORICAL = [
     "#e34948",  # red
 ]
 
-# Sequential single-hue ramp (blue), light -> dark
-SEQUENTIAL_BLUE = [
-    "#cde2fb",
-    "#9ec5f4",
-    "#6da7ec",
-    "#3987e5",
-    "#2a78d6",
-    "#1c5cab",
-    "#104281",
-    "#0d366b",
-]
-
 SURFACE = "#fcfcfb"
 PAGE_PLANE = "#f9f9f7"
 PRIMARY_INK = "#0b0b0b"
@@ -34,28 +21,30 @@ GRIDLINE = "#e1e0d9"
 BASELINE = "#c3c2b7"
 
 
-def blue_colormap():
-    return LinearSegmentedColormap.from_list("sequential_blue", SEQUENTIAL_BLUE)
-
-
 # Excel's classic green/yellow/red conditional-formatting triplets
-GROWTH_POSITIVE = "background-color: #C6EFCE; color: #006100"
-GROWTH_ZERO = "background-color: #FFEB9C; color: #9C6500"
-GROWTH_NEGATIVE = "background-color: #FFC7CE; color: #9C0006"
+GOOD_FILL = "background-color: #C6EFCE; color: #006100"
+WARN_FILL = "background-color: #FFEB9C; color: #9C6500"
+BAD_FILL = "background-color: #FFC7CE; color: #9C0006"
 
 
-def _growth_cell_style(value):
+def _threshold_cell_style(value, good_max, warn_max):
     if pd.isna(value):
         return ""
-    if value > 0:
-        return GROWTH_POSITIVE
-    if value < 0:
-        return GROWTH_NEGATIVE
-    return GROWTH_ZERO
+    if value <= good_max:
+        return GOOD_FILL
+    if value <= warn_max:
+        return WARN_FILL
+    return BAD_FILL
 
 
-def style_growth_column(styler, column):
-    return styler.map(_growth_cell_style, subset=[column])
+def style_percent_threshold(styler, column, good_max=0.02, warn_max=0.05):
+    """Green/yellow/red fill for a rate column where lower is better
+    (e.g. a cancellation rate) — green up to good_max, yellow up to
+    warn_max, red above that.
+    """
+    return styler.map(
+        lambda v: _threshold_cell_style(v, good_max, warn_max), subset=[column]
+    )
 
 
 def apply_plotly_theme(fig):

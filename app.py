@@ -7,7 +7,6 @@ import plotly.express as px
 import streamlit as st
 
 from mvh_transform import (
-    GROWTH_COLUMN,
     MANAGER_EMAIL_BY_NAME,
     apply_mvh_transform,
     build_column_formats,
@@ -17,7 +16,9 @@ from mvh_transform import (
     write_excel_with_formats,
 )
 from auth import logout_button, require_login
-from theme import CATEGORICAL, PAGE_CSS, apply_plotly_theme, blue_colormap, style_growth_column
+from theme import CATEGORICAL, PAGE_CSS, apply_plotly_theme, style_percent_threshold
+
+CO_PERCENT_COLUMN = "C.O. %"
 
 st.set_page_config(page_title="MVH Report", layout="wide")
 st.markdown(PAGE_CSS, unsafe_allow_html=True)
@@ -72,12 +73,9 @@ def full_table_height(df, max_height=600):
 
 def render_styled_table(df):
     formats = build_column_formats(df)
-    gradient_cols = [c for c in formats if c != GROWTH_COLUMN]
-    styled = df.style.format(formats).background_gradient(
-        cmap=blue_colormap(), subset=gradient_cols
-    )
-    if GROWTH_COLUMN in df.columns:
-        styled = style_growth_column(styled, GROWTH_COLUMN)
+    styled = df.style.format(formats)
+    if CO_PERCENT_COLUMN in df.columns:
+        styled = style_percent_threshold(styled, CO_PERCENT_COLUMN)
     st.dataframe(styled, use_container_width=True, height=full_table_height(df))
 
 

@@ -1,3 +1,7 @@
+import json
+from datetime import datetime
+from pathlib import Path
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -19,6 +23,25 @@ st.markdown(PAGE_CSS, unsafe_allow_html=True)
 
 MANAGER_COL = "Account Manager Email"
 PERIOD_LABELS = ["Yesterday", "Commercial Month (19th–18th)", "Calendar Month"]
+PERIOD_SLUGS = {
+    "Yesterday": "yesterday",
+    "Commercial Month (19th–18th)": "commercial",
+    "Calendar Month": "calendar",
+}
+
+UPLOAD_DIR = Path(__file__).parent / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
+METADATA_PATH = UPLOAD_DIR / "metadata.json"
+
+
+def _load_metadata():
+    if METADATA_PATH.exists():
+        return json.loads(METADATA_PATH.read_text())
+    return {}
+
+
+def _save_metadata(metadata):
+    METADATA_PATH.write_text(json.dumps(metadata))
 
 
 @st.cache_data
@@ -27,6 +50,17 @@ def load_file(file):
         df = pd.read_csv(file)
     else:
         df = pd.read_excel(file)
+    df.columns = df.columns.str.strip()
+    return df
+
+
+@st.cache_data
+def load_file_from_path(path_str, _mtime):
+    path = Path(path_str)
+    if path.suffix == ".csv":
+        df = pd.read_csv(path)
+    else:
+        df = pd.read_excel(path)
     df.columns = df.columns.str.strip()
     return df
 
@@ -104,28 +138,56 @@ def load_periods():
     st.subheader("Upload period exports")
     st.caption(
         "Commercial month = 19th of previous month through the 18th (inclusive). "
-        "Calendar month = 1st through end of month. Yesterday = a single-day export."
+        "Calendar month = 1st through end of month. Yesterday = a single-day export. "
+        "Uploads are kept until you clear them, so you won't need to re-upload after a "
+        "refresh or switching modes."
     )
-    col1, col2, col3 = st.columns(3)
-    uploaders = {
-        "Yesterday": col1.file_uploader("Yesterday", type=["csv", "xlsx", "xls"], key="yesterday"),
-        "Commercial Month (19th–18th)": col2.file_uploader(
-            "Commercial month", type=["csv", "xlsx", "xls"], key="commercial"
-        ),
-        "Calendar Month": col3.file_uploader(
-            "Calendar month", type=["csv", "xlsx", "xls"], key="calendar"
-        ),
-    }
+    metadata = _load_metadata()
+    columns = st.columns(3)
 
     periods = {}
-    for label, file in uploaders.items():
-        if file is None:
-            continue
-        d = load_file(file)
-        if is_raw_mvh_report(d):
-            d = apply_mvh_transform(d)
-        periods[label] = d
-    return periods
+    for col, label in zip(columns, PERIOD_LABELS):
+        slug = PERIOD_SLUGS[label]
+        with col:
+            upload_version = st.session_state.get(f"{slug}_version", 0)
+            uploaded = st.file_uploader(
+                label, type=["csv", "xlsx", "xls"], key=f"{slug}_{upload_version}"
+            )
+
+            if uploaded is not None:
+                for old in UPLOAD_DIR.glob(f"{slug}.*"):
+                    old.unlink()
+                target = UPLOAD_DIR / f"{slug}{Path(uploaded.name).suffix}"
+                target.write_bytes(uploaded.getvalue())
+                metadata[label] = {
+                    "filename": uploaded.name,
+                    "uploaded_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                }
+                _save_metadata(metadata)
+
+            existing = list(UPLOAD_DIR.glob(f"{slug}.*"))
+            if existing:
+                info = metadata.get(label, {})
+                st.caption(
+                    f"📄 {info.get('filename', existing[0].name)} — "
+                    f"last updated {info.get('uploaded_at', 'unknown')}"
+                )
+                if st.button("Clear", key=f"clear_{slug}"):
+                    for f in existing:
+                        f.unlink()
+                    metadata.pop(label, None)
+                    _save_metadata(metadata)
+                    st.session_state[f"{slug}_version"] = upload_version + 1
+                    st.rerun()
+
+                d = load_file_from_path(str(existing[0]), existing[0].stat().st_mtime)
+                if is_raw_mvh_report(d):
+                    d = apply_mvh_transform(d)
+                periods[label] = d
+            else:
+                st.caption("No file uploaded yet.")
+
+    return periods, metadata
 
 
 def mvh_report_page():
@@ -138,7 +200,7 @@ def mvh_report_page():
     )
 
     if mode in ("Account manager report", "Totals & averages"):
-        periods = load_periods()
+        periods, metadata = load_periods()
 
         if not periods:
             st.info("Upload at least one period file to get started.")
@@ -162,6 +224,9 @@ def mvh_report_page():
             period_tabs = st.tabs(period_tab_labels)
             for label, tab in zip(period_tab_labels, period_tabs):
                 with tab:
+                    info = metadata.get(label)
+                    if info:
+                        st.caption(f"🕒 Last updated {info['uploaded_at']}")
                     d = periods[label]
                     if MANAGER_COL not in d.columns:
                         st.warning(f"No '{MANAGER_COL}' column in this file.")
@@ -194,6 +259,9 @@ def mvh_report_page():
             period_tabs = st.tabs(period_tab_labels)
             for label, tab in zip(period_tab_labels, period_tabs):
                 with tab:
+                    info = metadata.get(label)
+                    if info:
+                        st.caption(f"🕒 Last updated {info['uploaded_at']}")
                     d = periods[label]
                     if MANAGER_COL not in d.columns:
                         st.warning(f"No '{MANAGER_COL}' column in this file.")

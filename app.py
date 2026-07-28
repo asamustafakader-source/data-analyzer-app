@@ -470,6 +470,28 @@ def main():
         logout_button()
 
     if user.get("role") == "admin":
+        manager_names = sorted(MANAGER_EMAIL_BY_NAME)
+        with st.sidebar:
+            st.markdown("### 👀 View as")
+            view_as = st.selectbox(
+                "Preview a manager's view",
+                ["Admin (full access)"] + manager_names,
+                key="admin_view_as",
+                label_visibility="collapsed",
+            )
+
+        if view_as != "Admin (full access)":
+            with st.sidebar:
+                st.info(f"Previewing as **{view_as}**")
+            manager_view(
+                {
+                    "name": view_as,
+                    "role": "manager",
+                    "manager_email": MANAGER_EMAIL_BY_NAME.get(view_as),
+                }
+            )
+            return
+
         with st.sidebar:
             st.markdown("### 📈 Reporting")
 

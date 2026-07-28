@@ -1,10 +1,13 @@
-import io
-
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from mvh_transform import PERCENT_COLUMNS, apply_mvh_transform, is_raw_mvh_report
+from mvh_transform import (
+    apply_mvh_transform,
+    build_column_formats,
+    is_raw_mvh_report,
+    write_excel_with_formats,
+)
 
 st.set_page_config(page_title="Data Analyzer", layout="wide")
 st.title("Data Analyzer")
@@ -32,16 +35,9 @@ if is_raw_mvh_report(df):
     )
     if apply_transform:
         df = apply_mvh_transform(df)
-        st.dataframe(
-            df.style.format({c: "{:.2%}" for c in PERCENT_COLUMNS}), use_container_width=True
-        )
-
-        buf = io.BytesIO()
-        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-            df.to_excel(writer, index=False, sheet_name="MVH")
         st.download_button(
             "Download transformed Excel",
-            buf.getvalue(),
+            write_excel_with_formats(df, sheet_name="MVH"),
             "MVH_transformed.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
@@ -62,7 +58,7 @@ with st.expander("Filter rows", expanded=False):
 
 st.subheader("Preview")
 st.caption(f"{filtered.shape[0]} rows x {filtered.shape[1]} columns")
-st.dataframe(filtered, use_container_width=True)
+st.dataframe(filtered.style.format(build_column_formats(filtered)), use_container_width=True)
 
 st.subheader("Summary statistics")
 st.dataframe(filtered.describe(include="all").transpose(), use_container_width=True)

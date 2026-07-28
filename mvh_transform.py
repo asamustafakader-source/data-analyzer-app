@@ -1,3 +1,5 @@
+import io
+
 import numpy as np
 import pandas as pd
 
@@ -114,3 +116,43 @@ def apply_mvh_transform(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     return df[FINAL_COLUMN_ORDER]
+
+
+EXCEL_NUMBER_FORMATS = {
+    "{:.2%}": "0.00%",
+    "{:,.0f}": "#,##0",
+    "{:,.2f}": "#,##0.00",
+}
+
+
+def build_column_formats(df: pd.DataFrame, exclude=("Store ID",)) -> dict:
+    """Maps each numeric column to a display format: percent for known MV/MVH
+    ratio columns, comma-separated otherwise (no decimals for whole numbers).
+    """
+    formats = {}
+    for col in df.columns:
+        if col in exclude:
+            continue
+        if col in PERCENT_COLUMNS:
+            formats[col] = "{:.2%}"
+        elif pd.api.types.is_numeric_dtype(df[col]):
+            non_null = df[col].dropna()
+            if not non_null.empty and (non_null % 1 == 0).all():
+                formats[col] = "{:,.0f}"
+            else:
+                formats[col] = "{:,.2f}"
+    return formats
+
+
+def write_excel_with_formats(df: pd.DataFrame, sheet_name: str = "Sheet1") -> bytes:
+    formats = build_column_formats(df)
+    buf = io.BytesIO()
+    with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name=sheet_name)
+        worksheet = writer.sheets[sheet_name]
+        for col_name, py_fmt in formats.items():
+            excel_fmt = EXCEL_NUMBER_FORMATS[py_fmt]
+            col_idx = df.columns.get_loc(col_name) + 1
+            for row in range(2, len(df) + 2):
+                worksheet.cell(row=row, column=col_idx).number_format = excel_fmt
+    return buf.getvalue()

@@ -1,6 +1,10 @@
+import io
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+
+from mvh_transform import PERCENT_COLUMNS, apply_mvh_transform, is_raw_mvh_report
 
 st.set_page_config(page_title="Data Analyzer", layout="wide")
 st.title("Data Analyzer")
@@ -20,6 +24,27 @@ if not uploaded:
     st.stop()
 
 df = load_file(uploaded)
+
+if is_raw_mvh_report(df):
+    st.subheader("MVH transform")
+    apply_transform = st.checkbox(
+        "This looks like the raw Tableau MVH export — apply the MVH transform", value=True
+    )
+    if apply_transform:
+        df = apply_mvh_transform(df)
+        st.dataframe(
+            df.style.format({c: "{:.2%}" for c in PERCENT_COLUMNS}), use_container_width=True
+        )
+
+        buf = io.BytesIO()
+        with pd.ExcelWriter(buf, engine="openpyxl") as writer:
+            df.to_excel(writer, index=False, sheet_name="MVH")
+        st.download_button(
+            "Download transformed Excel",
+            buf.getvalue(),
+            "MVH_transformed.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
 st.subheader("Filters")
 filtered = df.copy()

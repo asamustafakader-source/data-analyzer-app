@@ -8,8 +8,10 @@ from mvh_transform import (
     is_raw_mvh_report,
     write_excel_with_formats,
 )
+from theme import CATEGORICAL, PAGE_CSS, apply_plotly_theme, blue_colormap
 
 st.set_page_config(page_title="Data Analyzer", layout="wide")
+st.markdown(PAGE_CSS, unsafe_allow_html=True)
 st.title("Data Analyzer")
 
 
@@ -58,7 +60,11 @@ with st.expander("Filter rows", expanded=False):
 
 st.subheader("Preview")
 st.caption(f"{filtered.shape[0]} rows x {filtered.shape[1]} columns")
-st.dataframe(filtered.style.format(build_column_formats(filtered)), use_container_width=True)
+formats = build_column_formats(filtered)
+styled_preview = filtered.style.format(formats).background_gradient(
+    cmap=blue_colormap(), subset=list(formats.keys())
+)
+st.dataframe(styled_preview, use_container_width=True)
 
 st.subheader("Summary statistics")
 st.dataframe(filtered.describe(include="all").transpose(), use_container_width=True)
@@ -81,30 +87,32 @@ if chart_type == "Correlation heatmap":
     if len(numeric_cols) >= 2:
         corr = filtered[numeric_cols].corr(numeric_only=True)
         fig = px.imshow(corr, text_auto=".2f", color_continuous_scale="RdBu_r", zmin=-1, zmax=1)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(apply_plotly_theme(fig), use_container_width=True)
     else:
         st.warning("Need at least two numeric columns.")
 elif chart_type == "Histogram":
     x = st.selectbox("Column", numeric_cols or all_cols)
     color = st.selectbox("Color by (optional)", ["None"] + all_cols)
-    fig = px.histogram(filtered, x=x, color=None if color == "None" else color)
-    st.plotly_chart(fig, use_container_width=True)
+    fig = px.histogram(
+        filtered, x=x, color=None if color == "None" else color, color_discrete_sequence=CATEGORICAL
+    )
+    st.plotly_chart(apply_plotly_theme(fig), use_container_width=True)
 else:
     x = st.selectbox("X axis", all_cols)
-    y = st.selectbox("Y axis", numeric_cols or all_cols)
+    y = st.selectbox("Y axis", all_cols)
     color = st.selectbox("Color by (optional)", ["None"] + all_cols)
     color_arg = None if color == "None" else color
 
     if chart_type == "Scatter":
-        fig = px.scatter(filtered, x=x, y=y, color=color_arg)
+        fig = px.scatter(filtered, x=x, y=y, color=color_arg, color_discrete_sequence=CATEGORICAL)
     elif chart_type == "Line":
-        fig = px.line(filtered, x=x, y=y, color=color_arg)
+        fig = px.line(filtered, x=x, y=y, color=color_arg, color_discrete_sequence=CATEGORICAL)
     elif chart_type == "Bar":
-        fig = px.bar(filtered, x=x, y=y, color=color_arg)
+        fig = px.bar(filtered, x=x, y=y, color=color_arg, color_discrete_sequence=CATEGORICAL)
     else:  # Box
-        fig = px.box(filtered, x=x, y=y, color=color_arg)
+        fig = px.box(filtered, x=x, y=y, color=color_arg, color_discrete_sequence=CATEGORICAL)
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(apply_plotly_theme(fig), use_container_width=True)
 
 st.download_button(
     "Download filtered data as CSV",
